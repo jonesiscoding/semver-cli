@@ -1,0 +1,309 @@
+#!/bin/bash
+
+# @file semver
+# @brief Parses, increments, and formats semantic version numbers.
+# @option --quiet           Quiet Output
+# @option --verbose         Verbose Output
+# @option -h | --help       Show Help
+# @option --os              In macOS, use current OS version for input version
+# @option --git             Use git tags for input version
+# @option --json            Output as JSON object
+# @option --yaml            Output as YAML object
+# @option --format <format> Format full version number with given string
+# @option -c                Compact Output
+# @option -r                Raw Output
+# @option --major Increment Major Version
+# @option --minor Increment Minor Version
+# @option --patch | --rev   Increment Patch/Revision Version
+# @arg $1 string            Input Version
+# @arg $2 string            JQ-Style Filters
+# @exitcode 0               Success
+# @exitcode 1               Error
+# @exitcode 2               Invalid Option
+# @exitcode 3               Missing JQ
+# @exitcode 4               Missing YQ; used --yaml flag
+# @exitcode 5               Missing git; used --git flag
+# @exitcode 10              Not in Git Repo; used --git flag
+#
+# @license
+#
+#   Copyright 2026-04 AMJones <am@jonesiscoding.com>
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+
+#   You may obtain a copy of the License and Author's Notice at
+#
+#      https://github.com/jonesiscoding/semver-cli/blob/main/LICENSE
+#      https://github.com/jonesiscoding/semver-cli/blob/main/NOTICE
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# @version
+# @revision
+# @built
+
+## region ############################################## Command Setup
+
+selfVer="##VERSION##"
+selfName="semver"
+
+# Exit Codes
+exitOpt=2
+exitJQ=3
+exitYQ=4
+
+# Options Declaration
+declare selfFlags=()
+selfFlags+=(git os)
+selfFlags+=(json yaml c r format:)
+selfFlags+=(minor major patch)
+readonly selfFlags
+
+# Usage Declaration
+read -r -d '' selfUsage <<EOF
+Usage: $selfName [options] <version|path to .app> [filtering]
+
+Options:
+  -q, --quiet          Suppress all output.
+  -v, --verbose        Enable verbose output.
+  -h, --help           Show this help message and exit.
+  -V, --version        Display the version of the script.
+
+Input Options:
+  --os                 Use the OS version for the current version.
+  --git                Use Git to determine the current version.
+
+Output options:
+  --json               Output the result as JSON.
+  --yaml               Output the result as YAML.
+  --format <format>    Format the full version number with the given string
+                       Always:     %M=Major %N=Minor %R=Revision/Patch %P=Pre-release %B=Build
+                       If Present:          %n=Minor %r=Revision/Patch %p=Pre-release %b=Build
+                       (when using the lowercase variables, if not present, appropriate separator will be removed)
+  -c                   Compact (minified) output for JSON or YAML.
+  -r                   Raw output for JSON or YAML.
+                       JQ filtering options (IE: '.major') are also applied.
+
+Versioning options:
+  --minor              Increment the minor version number.
+  --major              Increment the major version number.
+  --patch | --rev      Increment the revision/patch version number.
+
+Examples:
+  $selfName --help
+  $selfName 1.2.3 --minor --json
+  $selfName /path/to/app.app --yaml
+EOF
+
+source lib/_in.sh
+
+## endregion ########################################### End Command Setup
+
+## region ############################################## Functions
+
+source lib/_out.sh
+source lib/_version.sh
+source lib/_git.sh
+source lib/_macos.sh
+
+## endregion ########################################### End Functions
+
+## region ############################################## Argument Handling
+
+args=()
+while [ "$1" != "" ]; do
+  case "$1" in
+    --git )     flagGit=true;      ;;
+    --os )      flagOs=true;       ;;
+    --json )    flagJson=true;     ;;
+    --yaml )    flagYaml=true;     ;;
+    --major )   flagMajor=true;    ;;
+    --minor )   flagMinor=true;    ;;
+    --patch | --rev ) flagPatch=true;    ;;
+    --format )  flagFormat="$2";   shift ;;
+    -c )        flagC=true;        ;;
+    -r )        flagR=true;        ;;
+    -* )        out::help && exit $exitOpt ;;
+    * )         args+=("$1")       ;;
+  esac
+  shift
+done
+readonly flagGit flagOs flagJson flagYaml flagMajor flagMinor flagPatch flagR flagC
+set -- "${args[@]}"
+
+if $flagVer; then
+  out::version
+  exit 0
+elif $flagH; then
+  out::help && exit 0
+fi
+
+# String Variables
+if $flagGit; then
+  if ! versionCur=$(git::version); then
+    exit $?
+  fi
+elif $flagOs; then
+  versionCur="$(sw_vers -ProductVersion)+$(sw_vers -BuildVersion)"
+elif versionApp=$(get_version_from_app "$1"); then
+  versionCur="$versionApp"
+  shift
+else
+  versionCur="$1"
+  shift
+fi
+versionRaw="${versionCur}"
+
+## endregion ########################################### End Argument Handling
+
+## region ############################################## Incrementing
+
+if $flagMajor || $flagMinor || $flagPatch; then
+  hasPatch=false
+  curVerOnly=$(echo "$versionCur" | cut -d '+' -f 1 | cut -d '-' -f 1)
+  curMajor=$(version::major "$curVerOnly")
+  curMinor=$(version::minor "$curVerOnly")
+  curPatch=0
+  if version::is::patch "$curVerOnly"; then
+    curPatch=$(version::patch "$curVerOnly")
+    [[ "$curPatch" -eq 0 ]] && hasPatch=true
+  fi
+
+  # Increment Version
+  newPatch="$curPatch"
+  if $flagPatch && ! $flagMinor && ! $flagMajor; then
+    newPatch=$((curPatch+1))
+  fi
+
+  newMinor="$curMinor"
+  if $flagMinor && ! $flagMajor; then
+    newPatch="0"
+    newMinor=$((curMinor+1))
+    if $flagPatch; then
+      newPatch=$((newPatch+1))
+    fi
+  fi
+
+  newMajor="$curMajor"
+  if $flagMajor; then
+    newPatch=0
+    newMinor=0
+    newMajor=$((newMajor+1))
+    if $flagMinor; then
+      newMinor=$((newMinor+1))
+    fi
+
+    if $flagPatch; then
+      newPatch=$((newPatch+1))
+    fi
+  fi
+
+  versionNew="${newMajor}.${newMinor}"
+  if $hasPatch || [[ "$newPatch" -ne 0 ]]; then
+    versionNew="${versionNew}.${newPatch}"
+  fi
+
+  versionCur="$versionNew"
+fi
+
+## endregion ########################################### End Incrementing
+
+## region ############################################## Formatting
+
+curAll=$(version::format "$versionCur")
+if [[ -n "$flagFormat" ]]; then
+  curFull=$(version::format "$versionCur" <<< "$flagFormat")
+  versionCur="$curFull"
+else
+  curFull=$(version::format "$versionCur" <<< "%M.%N.%r")
+fi
+
+## endregion ########################################### End Formatted
+
+## region ############################################## Build Output
+
+if $flagQ && ! $flagJson && ! $flagYaml && [[ -z "$1" ]]; then
+  json="$versionCur"
+else
+  # Get Parts
+  curPre=$(version::pre "$versionCur")
+  curBuild=$(version::build "$versionCur")
+  curVerOnly=$(version::only "$versionCur")
+  curMajor=$(version::major "$curVerOnly")
+  curMinor=$(version::minor "$curVerOnly")
+  curPatch=$(version::patch "$curVerOnly")
+  curExtra=$(version::extra "$curVerOnly")
+  # Build JSON
+  which jq | grep -q "jq" || exit "$exitJQ"
+  json="{}"
+  json=$(jq --arg raw "$versionRaw" '.raw=$raw' <<< "$json")
+  json=$(jq --arg all "$curAll" '.all=$all' <<< "$json")
+  json=$(jq --arg full "$curFull" '.full=$full' <<< "$json")
+  json=$(jq --arg maj "$curMajor" '.major= ($maj | tonumber)' <<< "$json")
+  json=$(jq --arg min "$curMinor" '.minor = ($min | tonumber)' <<< "$json")
+  json=$(jq --arg pat "$curPatch" '.patch= ($pat | tonumber)' <<< "$json")
+  json=$(jq --arg pre "$curPre" '.pre=$pre' <<< "$json")
+  json=$(jq --arg build "$curBuild" '.build=$build' <<< "$json")
+  json=$(jq --arg extra "$curExtra" '.extra=$extra' <<< "$json")
+
+  # Do Query
+  if [[ -n "$1" ]]; then
+    json=$(jq "$@" <<< "$json")
+    case "$(echo "$json" | xargs)" in
+      \{*\}|\[*\])
+        ;;
+      *)
+        jq <<< "$json";
+        exit 0
+        ;;
+    esac
+  fi
+fi
+
+## endregion ########################################### End Build Output
+
+## region ############################################## Do Output
+
+
+if $flagQ && ! $flagJson && ! $flagYaml; then
+
+  # Simple Text Output
+  echo "$json"
+  exit 0
+
+elif $flagJson; then
+
+  # JSON Output
+  if $flagC; then
+    jq -c '.' <<< "$json"
+  elif $flagR; then
+    jq -r '.' <<< "$json"
+  else
+    jq '.' <<< "$json"
+  fi
+
+elif $flagYaml; then
+
+  # YAML Output
+  which yq | grep -q "yq" || exit "$exitYQ"
+  if $flagC; then
+    jq -c '.' <<< "$json" | yq
+  elif $flagR; then
+    jq -r '.' <<< "$json" | yq
+  else
+    jq '.' <<< "$json" | yq -P
+  fi
+
+else
+
+  # Column Output
+  jq -r 'to_entries[] | (.key | split("_") | map(sub("^(?<a>.)"; .a | ascii_upcase)) | join(" ")) as $properKey | "\($properKey):\t\(.value)"' <<< "$json" | column -t -s $'\t'
+
+fi
+
+## endregion ########################################### End Do Output
