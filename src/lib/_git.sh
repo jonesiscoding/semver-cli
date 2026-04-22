@@ -38,8 +38,9 @@ function git::version() {
   if [ ! -x "$gitX" ]; then
     return "$exitGit"
   elif ! git::is; then
-    return $exitRepo
+    return "$exitRepo"
   else
+    $gitX pull --tags > /dev/null 2>&1
     tag=$($gitX describe --tags --abbrev=0 --first-parent 2>/dev/null | sed 's/^v//');
     if [[ -z "$tag" ]]; then
       while IFS= read -r tag; do
