@@ -41,7 +41,8 @@ function git::version() {
     return "$exitRepo"
   else
     $gitX pull --tags > /dev/null 2>&1
-    tag=$($gitX describe --tags --abbrev=0 --first-parent 2>/dev/null | sed 's/^v//');
+    # shellcheck disable=SC2046
+    tag=$($gitX describe --tags $($gitX tag -l '*.*' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?(\+[a-zA-Z0-9\.-]+)?$' | sort -Vr | head -n 1) --abbrev=0 --first-parent | sed 's/^v//')
     if [[ -z "$tag" ]]; then
       while IFS= read -r tag; do
         branches=$($gitX branch -a --contains "$tag" 2>/dev/null)
