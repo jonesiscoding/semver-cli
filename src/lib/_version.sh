@@ -89,7 +89,7 @@ function version::format() {
   fi
 
   formatted=$(echo "$formatted" | sed "s#%B#${tBuild}#")
-  if [ -z "$tPre" ]; then
+  if [ -n "$tBuild" ]; then
     formatted=$(echo "$formatted" | sed -E "s#([\+]?)%b#\1${tBuild}#")
   else
     formatted=$(echo "$formatted" | sed -E "s#([\+]?)%b##")
