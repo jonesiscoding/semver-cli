@@ -1,11 +1,8 @@
 #!/bin/zsh
 
 # Terminal cs
-isQuiet=false
-isVerbose=true
-isNotify=false
-myLog="/var/log/vat.log"
-[[ "$(uname)" == "Darwin" ]] && myLog="${HOME}/Library/Logs/vat.log"
+myLog="$HOME/vat.log"
+[[ "$(uname)" == "Darwin" ]] && myLog="${HOME}/Library/Logs/build.log"
 myLogDate=$(/bin/date "+%Y-%m-%d %H:%M:%S")
 
 if [[ -n "$NO_COLOR" || "$TERM" =~ ^(dumb|emacs)$ || -n "$CI" ]] || ! command -v tput >/dev/null 2>&1; then
@@ -66,9 +63,9 @@ function notify() {
   local padding="---------------------------------------------------------------------------"
   isNotify=true
   while IFS= read -r line; do
-    if $isVerbose; then
+    if $flagV; then
       echo "$line"
-    elif ! $isQuiet; then
+    elif ! $flagQ; then
       printf "${BLUE}%s${RESET}%s " "$line" "${padding:${#line}}"
     fi
     echo "Trying: $line" | log
@@ -90,7 +87,7 @@ function default() {
 function badge() {
   while IFS= read -r line; do
     if $isNotify; then
-      ! $isQuiet && $isNotify && echo -e "[${myContext}${line}${RESET}]"
+      ! $flagQ && $isNotify && echo -e "[${myContext}${line}${RESET}]"
       isNotify=false
 
       return 0
@@ -100,7 +97,7 @@ function badge() {
 
 function out() {
   local line
-  if $isQuiet; then
+  if $flagQ; then
     while IFS= read -r line; do
       echo "$line" | log
     done
@@ -113,7 +110,7 @@ function out() {
 
 function verbose() {
   local line
-  if $isVerbose; then
+  if $flagV; then
     while IFS= read -r line; do
       echo "${myContext}$line${RESET}"
     done
@@ -132,17 +129,17 @@ function cronic() {
   local tmp status
   tmp=$(mktemp)
 
-  if ! $isVerbose; then
+  if ! $flagV; then
     # Run the command and redirect everything to a temp file
     "$@" > "$tmp" 2>&1
     status=$?
 
     # Only print the file content if the command failed
     if [ "$status" -ne 0 ]; then
-      $isNotify && ! $isQuiet && echo "ERROR" | error | badge
-      ! $isVerbose && ! $isQuiet && echo "$HR"
-      ! $isQuiet && cat "$tmp"
-      ! $isVerbose && ! $isQuiet && echo "$HR"
+      $isNotify && ! $flagQ && echo "ERROR" | error | badge
+      ! $flagV && ! $flagQ && echo "$HR"
+      ! $flagQ && cat "$tmp"
+      ! $flagV && ! $flagQ && echo "$HR"
     fi
 
     rm -f "$tmp"
