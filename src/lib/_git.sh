@@ -29,7 +29,7 @@ exitGit=5
 exitRepo=10
 
 function git::is() {
-  $gitX rev-parse --is-inside-work-tree 2>/dev/null
+  $gitX rev-parse --is-inside-work-tree 2>/dev/null | grep -q "true"
 }
 
 function git::version() {
