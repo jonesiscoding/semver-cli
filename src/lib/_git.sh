@@ -35,8 +35,8 @@ function git::is() {
 function git::version() {
   local tag branches
 
-  if ! $gitX; then
-    return $exitGit
+  if [ ! -x "$gitX" ]; then
+    return "$exitGit"
   elif ! git::is; then
     return $exitRepo
   else
