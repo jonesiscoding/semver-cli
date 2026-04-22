@@ -139,7 +139,7 @@ function cronic() {
 
     # Only print the file content if the command failed
     if [ "$status" -ne 0 ]; then
-      ! $isNotify && ! $isQuiet && echo "ERROR" | error | badge
+      $isNotify && ! $isQuiet && echo "ERROR" | error | badge
       ! $isVerbose && ! $isQuiet && echo "$HR"
       ! $isQuiet && cat "$tmp"
       ! $isVerbose && ! $isQuiet && echo "$HR"
