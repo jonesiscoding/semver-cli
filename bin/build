@@ -18,15 +18,19 @@ fi
 
 ## region ###################################### Functions
 
+# shellcheck source=../src/lib/_out.sh
+source "$selfDir/../src/lib/_in.sh"
+source "$selfDir/../src/lib/_out.sh"
+
 function script::build() {
-  local inFile outFile  placeholder outVersion cwd
+  local inFile outFile  placeholder outVersion
 
   inFile="$1"
   outFile="$2"
   outVersion="${3-:1.0}"
   placeholder="${4:-##VERSION##}"
 
-  if ! "$selfLib/inline.sh" --in-file "$inFile" --out-file "$outFile"; then
+  if ! cronic "$selfLib/inline.sh" --in-file "$inFile" --out-file "$outFile"; then
     return 1
   fi
 
@@ -69,33 +73,30 @@ function script::metadata() {
 ## region ###################################### Main Code
 
 versionOut="$1"
-echo "Handling Scripts..."
+echo "Handling Scripts..." | out
 for file in "${fileScripts[@]}"
 do
   filename=$(basename "$file")
-  echo "  Processing $file..."
+  echo "  Processing $file" | default | out
   if [ ! -f "$file" ]; then
-    echo "  ERROR: File does not exist!"
+    echo "  ERROR: File does not exist!" | error | out
     exit 1
   else
     fileOut="$selfOut/$filename"
     [ -f "$fileOut" ] && rm "$fileOut"
-    out="    Building $filename"
-    printf "%s %s " "$out" "${padding:${#out}}"
+    echo "   Building $filename" | notify
     if ! script::build "$file" "$fileOut" "$versionOut" ; then
-      echo "ERROR: Building"
       exit 1
     fi
-    echo "DONE"
+    ! $flagV && echo "DONE" | success | badge
 
-    out="    Adding Metadata to $filename"
-    printf "%s %s " "$out" "${padding:${#out}}"
+    echo "   Adding Metadata to $filename" | notify
     rev=$(git log -n 1  --pretty="format:%h (%ai)" -- "$file")
     date=$(date +"%Y-%m-%d %H:%M:%S %z")
     if ! script::metadata "$fileOut" "$rev" "$date" "$USER"; then
-      echo "ERROR: Metadata"
+      echo "ERROR" | error | badge
       exit 1
     fi
-    echo "DONE"
+    ! $flagV && echo "DONE" | success | badge
   fi
 done
