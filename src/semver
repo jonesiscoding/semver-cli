@@ -49,6 +49,7 @@
 
 ## region ############################################## Command Setup
 
+selfDir="$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P )"
 selfVer="##VERSION##"
 selfName="semver"
 
@@ -100,16 +101,21 @@ Examples:
   $selfName /path/to/app.app --yaml
 EOF
 
-source lib/_in.sh
+# shellcheck source=./lib/_in.sh
+source "$selfDir/lib/_in.sh"
 
 ## endregion ########################################### End Command Setup
 
 ## region ############################################## Functions
 
-source lib/_out.sh
-source lib/_version.sh
-source lib/_git.sh
-source lib/_macos.sh
+# shellcheck source=./lib/_out.sh
+source "$selfDir/lib/_out.sh"
+# shellcheck source=./lib/_version.sh
+source "$selfDir/lib/_version.sh"
+# shellcheck source=./lib/_git.sh
+source "$selfDir/lib/_git.sh"
+# shellcheck source=./lib/_macos.sh
+source "$selfDir/lib/_macos.sh"
 
 ## endregion ########################################### End Functions
 
